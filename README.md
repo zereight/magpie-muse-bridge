@@ -92,7 +92,7 @@ too old to cancel the flow, a bounded timeout cleans it up; use `muse login` in
 a terminal and then the existing-login method.
 
 Models show up as `muse-bridge/<model>`:
-`muse-wonder-full-1.0`, `muse-wonder-1.0`, `muse-spark-1.3`, `muse-spark-1.2`.
+`muse-wonder-full-1.0`, `muse-wonder-1.0`, `muse-ember-1.0`, `muse-spark-1.3`, `muse-spark-1.2`.
 Thinking variants map to MSP `turn/start.reasoningEffort` (minimal … max).
 The requested model must appear under Meta in the host's `model/list` catalog;
 an unavailable model is rejected instead of silently switching providers.

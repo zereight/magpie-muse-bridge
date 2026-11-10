@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add `muse-ember-1.0` (Muse Ember 1.0; 1,007,997 context, 128,000 output,
+  minimal … max efforts) to the model list.
 - Forward complete `<advisory>` blocks, with the fixed advisor preamble omp puts
   before the first one, beside a live `tool_result` as a `<system-reminder>`
   instead of rejecting the request with 400. Other text beside a live

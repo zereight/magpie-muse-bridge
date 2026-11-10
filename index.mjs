@@ -34,6 +34,7 @@ const ALL_EFFORTS = ["minimal", "low", "medium", "high", "xhigh", "max"]
 const MODELS = [
   { id: "muse-wonder-full-1.0", name: "Muse Wonder Full 1.0", context: 1007997, output: 128000, efforts: ALL_EFFORTS },
   { id: "muse-wonder-1.0", name: "Muse Wonder 1.0", context: 1007997, output: 128000, efforts: ALL_EFFORTS },
+  { id: "muse-ember-1.0", name: "Muse Ember 1.0", context: 1007997, output: 128000, efforts: ALL_EFFORTS },
   { id: "muse-spark-1.3", name: "Muse Spark 1.3", context: 1048576, output: 65536, efforts: ALL_EFFORTS },
   { id: "muse-spark-1.2", name: "Muse Spark 1.2", context: 1048576, output: 65536, efforts: ALL_EFFORTS.slice(0, 5) },
 ]
