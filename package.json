@@ -1,5 +1,5 @@
 {
-  "name": "@magpie-community/magpie-muse-bridge",
+  "name": "@zereight/magpie-muse-bridge",
   "version": "0.2.2",
   "description": "Magpie provider using the official Muse Code SDK with client tools bridged through MCP",
   "repository": {
