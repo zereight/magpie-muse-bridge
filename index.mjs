@@ -1464,18 +1464,45 @@ async function handleRequest(init) {
         }
         if (conv.turn !== turn) return jsonError(409, "muse bridge: the tool response has already completed")
         if (turn.attached) throw new BusyError("muse bridge: this conversation already has an active response")
-        const results = withContextNotices(matches.map(({ block, match }) => ({
+        const pending = matches.map(({ block, match }) => ({
           block,
           call: match.call,
           result: toolResult(block),
-        })), body)
-        turn.validateResults(results)
-        if (!conv.matchesHistory(trailingMessages(body).history) || conv.model !== model ||
-          turn.toolsSignature !== stableJSON(tools) || conv.workDir !== callerWorkDir) {
+        }))
+        let results = null
+        try {
+          results = withContextNotices(pending, body)
+        } catch (error) {
+          if (!(error instanceof UnsupportedContent)) throw error
+          // New input arrived beside live tool results (e.g. the user typed
+          // mid-turn). Finalize this turn and replay everything, results plus
+          // text, as a fresh turn instead of refusing with 400.
+          const texts = []
+          for (const message of trailingMessages(body).messages) {
+            const blocks = Array.isArray(message.content) ? message.content : [message.content]
+            for (const block of blocks) {
+              if (typeof block === "string") texts.push(block)
+              else if (block?.type === "text" && block.text) texts.push(block.text)
+            }
+          }
+          console.warn(`muse bridge: replaying fresh turn; text beside live tool results: ${JSON.stringify(texts.join(" ").slice(0, 160))}`)
+        }
+        turn.validateResults(results ?? pending)
+        const replay = !results || !conv.matchesHistory(trailingMessages(body).history) || conv.model !== model ||
+          turn.toolsSignature !== stableJSON(tools) || conv.workDir !== callerWorkDir
+        if (replay) {
           // A changed context or configuration can't go on in this muse run.
           // Replay the real results into a new session instead.
           turn.finalize()
           conv.reset()
+          // The fresh turn below needs a free run slot: wait for the killed
+          // turn's process to exit (it leaves liveTurns in its close handler).
+          if (!turn.exited) {
+            const start = Date.now()
+            while (!turn.exited && Date.now() - start < 5_000) {
+              await new Promise((resolve) => setTimeout(resolve, 25))
+            }
+          }
         } else {
           if (!turn.done) {
             turn.continueWith(results)
