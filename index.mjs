@@ -912,6 +912,31 @@ function systemText(body) {
   return typeof body.system === "string" ? body.system : body.system.map((block) => block.text || "").join("")
 }
 
+// Claude Code sends system-role entries inside `messages` (often last). They
+// are instructions, not turns: fold well-formed ones into `system` so the last
+// remaining message is the user's. Malformed ones stay for validateBody.
+function foldSystemMessages(body) {
+  if (!Array.isArray(body?.messages)) return
+  const texts = []
+  const kept = []
+  for (const message of body.messages) {
+    if (message?.role === "system" || message?.role === "developer") {
+      const c = message.content
+      if (typeof c === "string") { texts.push(c); continue }
+      if (Array.isArray(c) && c.every(block => block?.type === "text" && typeof block.text === "string")) {
+        texts.push(c.map(block => block.text).join("")); continue
+      }
+    }
+    kept.push(message)
+  }
+  if (!texts.length) return
+  body.messages = kept
+  const extra = texts.join("\n\n")
+  if (!body.system) body.system = extra
+  else if (typeof body.system === "string") body.system += "\n\n" + extra
+  else if (Array.isArray(body.system)) body.system = [...body.system, { type: "text", text: "\n\n" + extra }]
+}
+
 function renderInitialPrompt(body, callerWorkDir, tools, sink) {
   const messages = body.messages || []
   const split = extractToolResults(body).length ? messages.length - trailingMessages(body).messages.length : messages.length - 1
@@ -1394,6 +1419,7 @@ async function handleRequest(init) {
   try {
     const raw = typeof init.body === "string" ? init.body : new TextDecoder().decode(init.body)
     body = JSON.parse(raw)
+    foldSystemMessages(body)
     validateBody(body)
   } catch (error) {
     return jsonError(error.statusCode ?? 400, error.message)
