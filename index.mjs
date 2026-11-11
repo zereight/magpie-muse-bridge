@@ -141,6 +141,16 @@ function museEnv(dirs) {
   return env
 }
 
+// muse withholds every MCP server ("MCP startup withheld 1 server: workspace is
+// untrusted") unless the workspace is trusted, which leaves the session with no
+// tools. The workspace is an empty private temp dir, so trusting it is safe.
+// muse keys trust by realpath (/var/folders -> /private/var/folders on macOS).
+function trustWorkspace(dirs) {
+  const file = path.join(dirs.config, "muse", "trust.json")
+  const trust = { schema_version: 1, projects: { [fs.realpathSync(dirs.work)]: { decision: "trusted" } } }
+  fs.writeFileSync(file, JSON.stringify(trust, null, 2), { mode: 0o600 })
+}
+
 function makeDirs(base) {
   const dirs = {
     base,
@@ -153,6 +163,7 @@ function makeDirs(base) {
     fs.mkdirSync(dir, { recursive: true, mode: 0o700 })
   }
   linkAuth(dirs.config)
+  trustWorkspace(dirs)
   return dirs
 }
 
@@ -1037,15 +1048,18 @@ function extractToolResults(body) {
 // Forward complete protocol-generated context notices without turning ordinary
 // user instructions into tool output. OpenCode can append a <system-update>
 // after a tool result when its dynamic tool catalog changes, and omp appends
-// <advisory> blocks from its advisor.
+// <advisory> blocks from its advisor, <system-reminder> blocks (todo
+// reminders) and <system-notice> blocks (background job completions).
 function withContextNotices(results, body) {
   const notices = []
   let seenResult = false
   // The advisor in omp prepends a fixed one-line preamble to its first
   // <advisory> block; consume it together with the block. A user message such
   // as "The user sent a new message while you were working:" is not matched,
-  // so it is still rejected below.
-  const contextNotice = /<system-update(?:\s[^>]*)?>[\s\S]*?<\/system-update>|(?:The following is an aggregated review from other models\.[^<]*)?<advisory(?:\s[^>]*)?>[\s\S]*?<\/advisory>|(?:\[SYSTEM NOTIFICATION - NOT USER INPUT\][^<]*)?<task-notification>[\s\S]*?<\/task-notification>/g
+  // so it is still rejected below. <system-reminder>/<system-notice> blocks are
+  // forwarded only when they do not carry that user-message notice, so a real
+  // mid-turn user message is never swallowed as a harness notice.
+  const contextNotice = /<system-update(?:\s[^>]*)?>[\s\S]*?<\/system-update>|(?:The following is an aggregated review from other models\.[^<]*)?<advisory(?:\s[^>]*)?>[\s\S]*?<\/advisory>|<system-reminder(?:\s[^>]*)?>(?:(?!The user sent (?:a new message while you were working|the following message):)[\s\S])*?<\/system-reminder>|<system-notice(?:\s[^>]*)?>(?:(?!The user sent (?:a new message while you were working|the following message):)[\s\S])*?<\/system-notice>|(?:\[SYSTEM NOTIFICATION - NOT USER INPUT\][^<]*)?<task-notification>[\s\S]*?<\/task-notification>/g
   for (const message of trailingMessages(body).messages) {
     const blocks = Array.isArray(message.content) ? message.content : [message.content]
     for (const block of blocks) {
@@ -1057,7 +1071,7 @@ function withContextNotices(results, body) {
       if (!seenResult && text.trim()) {
         throw new UnsupportedContent("text beside a live tool_result; send it after the tool response completes")
       }
-      notices.push(...Array.from(text.matchAll(contextNotice), match => match[0]))
+      notices.push(...Array.from(text.matchAll(contextNotice), match => match[0].replace(/^<system-reminder(?:\s[^>]*)?>\s*|\s*<\/system-reminder>$/g, "")))
       const rest = text.replace(contextNotice, "").replace(/<\/?system-reminder(?:\s[^>]*)?>/g, "").trim()
       if (/The user sent (?:a new message while you were working|the following message):/.test(rest) ||
         (rest && !/^(?:<total_tokens>[^<]*<\/total_tokens>|Token usage: \S+; \S+ remaining)$/.test(rest) &&
